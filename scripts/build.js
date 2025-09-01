@@ -16,7 +16,7 @@ if (!existsSync(distPath)) {
 // Create version.json with current timestamp
 const versionData = {
   version: '1.0.0',
-  platform: 'edgeone-pages',
+  platform: 'cloudflare-pages',
   build: new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, ''),
   architecture: 'functions',
   timestamp: new Date().toISOString()

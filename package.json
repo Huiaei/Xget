@@ -4,17 +4,20 @@
     "xget": "file:"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.67",
+    "@cloudflare/workers-types": "^4.20250724.0",
     "eslint": "^9.31.0",
     "prettier": "^3.6.2",
-    "vitest": "^3.1.4"
+    "vitest": "^3.1.4",
+    "wrangler": "^4.26.0"
   },
   "name": "xget",
   "private": false,
   "scripts": {
     "build": "node scripts/build.js",
     "build:static": "node scripts/build.js",
-    "deploy": "echo 'Deploy via EdgeOne Pages dashboard or CLI'",
-    "dev": "node server.js",
+    "deploy": "wrangler pages deploy dist",
+    "dev": "wrangler pages dev dist --compatibility-date=2024-10-22 --compatibility-flags=nodejs_compat",
     "format": "prettier --write src/ test/ functions/ *.js *.json *.md",
     "format:check": "prettier --check src/ test/ functions/ *.js *.json *.md",
     "lint": "eslint src/ test/ functions/",
