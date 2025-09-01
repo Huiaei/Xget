@@ -4,7 +4,9 @@ export default defineWorkersConfig({
   test: {
     poolOptions: {
       workers: {
-        wrangler: { configPath: './wrangler.toml' }
+        wrangler: {
+          configPath: './wrangler.test.toml'
+        }
       }
     },
     coverage: {
@@ -19,7 +21,7 @@ export default defineWorkersConfig({
         '*.config.js',
         '*.config.ts'
       ],
-      include: ['src/**/*.js', 'src/**/*.ts'],
+      include: ['src/**/*.js', 'src/**/*.ts', 'functions/**/*.js'],
       thresholds: {
         global: {
           branches: 80,

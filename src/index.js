@@ -248,7 +248,7 @@ async function fetchToken(wwwAuthenticate, scope, authorization) {
   if (authorization) {
     headers.set('Authorization', authorization);
   }
-  return await fetch(url, { method: 'GET', headers: headers });
+  return await fetch(url, { method: 'GET', headers });
 }
 
 /**
@@ -261,7 +261,7 @@ function responseUnauthorized(url) {
   headers.set('WWW-Authenticate', `Bearer realm="https://${url.hostname}/v2/auth",service="Xget"`);
   return new Response(JSON.stringify({ message: 'UNAUTHORIZED' }), {
     status: 401,
-    headers: headers
+    headers
   });
 }
 
@@ -353,7 +353,7 @@ async function handleRequest(request, env, ctx) {
 
     // Handle Docker authentication
     if (isDocker && url.pathname === '/v2/auth') {
-      const newUrl = new URL(config.PLATFORMS[platform] + '/v2/');
+      const newUrl = new URL(`${config.PLATFORMS[platform]}/v2/`);
       const resp = await fetch(newUrl.toString(), {
         method: 'GET',
         redirect: 'follow'
@@ -366,7 +366,7 @@ async function handleRequest(request, env, ctx) {
         return resp;
       }
       const wwwAuthenticate = parseAuthenticate(authenticateStr);
-      let scope = url.searchParams.get('scope');
+      const scope = url.searchParams.get('scope');
       return await fetchToken(wwwAuthenticate, scope || '', authorization || '');
     }
 
@@ -480,7 +480,7 @@ async function handleRequest(request, env, ctx) {
     let attempts = 0;
     while (attempts < config.MAX_RETRIES) {
       try {
-        monitor.mark('attempt_' + attempts);
+        monitor.mark(`attempt_${attempts}`);
 
         // Fetch with timeout
         const controller = new AbortController();
@@ -702,7 +702,7 @@ async function handleRequest(request, env, ctx) {
     // Create final response
     const finalResponse = new Response(responseBody, {
       status: response.status,
-      headers: headers
+      headers
     });
 
     // Cache successful responses (skip caching for Git, Docker, and AI inference operations)
@@ -740,7 +740,7 @@ function addPerformanceHeaders(response, monitor) {
   addSecurityHeaders(headers);
   return new Response(response.body, {
     status: response.status,
-    headers: headers
+    headers
   });
 }
 

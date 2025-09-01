@@ -3,7 +3,7 @@ import js from '@eslint/js';
 export default [
   js.configs.recommended,
   {
-    files: ['src/**/*.js', 'test/**/*.js'],
+    files: ['src/**/*.js', 'test/**/*.js', 'functions/**/*.js', 'scripts/**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
@@ -19,6 +19,12 @@ export default [
         URL: 'readonly',
         URLSearchParams: 'readonly',
         console: 'readonly',
+
+        // Node.js globals (for scripts)
+        process: 'readonly',
+        Buffer: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
 
         // Vitest globals
         describe: 'readonly',

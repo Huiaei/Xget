@@ -226,7 +226,7 @@ async function generateCoverageSummary() {
     console.log('\n📊 Coverage Summary:');
     console.log('===================');
 
-    const total = coverage.total;
+    const { total } = coverage;
     console.log(`Lines:      ${total.lines.pct}% (${total.lines.covered}/${total.lines.total})`);
     console.log(
       `Functions:  ${total.functions.pct}% (${total.functions.covered}/${total.functions.total})`
@@ -239,7 +239,7 @@ async function generateCoverageSummary() {
     );
 
     // Check if coverage meets threshold
-    const threshold = TEST_CONFIG.coverage.threshold;
+    const { threshold } = TEST_CONFIG.coverage;
     const meetsThreshold = [
       total.lines.pct >= threshold,
       total.functions.pct >= threshold,

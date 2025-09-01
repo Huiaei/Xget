@@ -170,7 +170,7 @@ describe('Utility Functions', () => {
     });
 
     it('should reject extremely long paths', () => {
-      const longPath = '/' + 'a'.repeat(3000);
+      const longPath = `/${'a'.repeat(3000)}`;
       const request = new Request(`https://example.com${longPath}`);
       const url = new URL(request.url);
 

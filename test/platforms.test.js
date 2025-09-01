@@ -81,9 +81,7 @@ describe('Platform Configuration', () => {
     });
 
     it('should transform Civitai paths correctly', () => {
-      expect(transformPath('/civitai/api/v1/models', 'civitai')).toBe(
-        '/api/v1/models'
-      );
+      expect(transformPath('/civitai/api/v1/models', 'civitai')).toBe('/api/v1/models');
 
       expect(transformPath('/civitai/api/v1/model-versions/1318', 'civitai')).toBe(
         '/api/v1/model-versions/1318'

@@ -13,7 +13,7 @@ const TEST_CONFIG = {
 
 // Global test state
 let testStartTime;
-let testMetrics = {
+const testMetrics = {
   totalTests: 0,
   passedTests: 0,
   failedTests: 0,
