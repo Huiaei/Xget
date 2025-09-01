@@ -1,5 +1,5 @@
 /**
- * Health check endpoint for Cloudflare Pages Functions
+ * Health check endpoint for EdgeOne Pages Functions
  * @param {Object} context - Pages Functions context
  * @returns {Promise<Response>} Health status response
  */
@@ -8,9 +8,9 @@ export async function onRequest(context) {
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'xget',
-    platform: 'cloudflare-pages',
+    platform: 'edgeone-pages',
     version: '1.0.0',
-    environment: context.env.ENVIRONMENT || 'production',
+    environment: context.env?.ENVIRONMENT || 'production',
     uptime: 'unknown'
   };
 

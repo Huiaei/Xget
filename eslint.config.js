@@ -8,10 +8,7 @@ export default [
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: {
-        // Cloudflare Workers globals
-        addEventListener: 'readonly',
-        caches: 'readonly',
-        crypto: 'readonly',
+        // Web/EdgeOne Pages globals
         fetch: 'readonly',
         Request: 'readonly',
         Response: 'readonly',
@@ -19,12 +16,17 @@ export default [
         URL: 'readonly',
         URLSearchParams: 'readonly',
         console: 'readonly',
+        AbortSignal: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
 
-        // Node.js globals (for scripts)
+        // Node.js globals (for EdgeOne Pages and scripts)
         process: 'readonly',
         Buffer: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        global: 'readonly',
+        globalThis: 'readonly',
 
         // Vitest globals
         describe: 'readonly',

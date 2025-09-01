@@ -1,6 +1,37 @@
 import { CONFIG, createConfig } from '../src/config/index.js';
 import { transformPath } from '../src/config/platforms.js';
 
+// Simple in-memory cache for EdgeOne Pages
+const cache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Simple cache implementation for EdgeOne Pages
+ */
+class SimpleCache {
+  static get(key) {
+    const item = cache.get(key);
+    if (item && Date.now() - item.timestamp < CACHE_TTL) {
+      return item.response.clone();
+    }
+    if (item) {
+      cache.delete(key);
+    }
+    return null;
+  }
+
+  static put(key, response) {
+    cache.set(key, {
+      response: response.clone(),
+      timestamp: Date.now()
+    });
+  }
+
+  static delete(key) {
+    cache.delete(key);
+  }
+}
+
 /**
  * Monitors performance metrics during request processing
  */
@@ -279,12 +310,11 @@ export async function handleRequest(request, env, ctx) {
     monitor.mark('transform');
 
     // Create cache key for non-special operations
-    const cache = caches.default;
-    const cacheKey = new Request(request.url, { method: 'GET' });
+    const cacheKey = request.url;
 
     // Try cache first for regular requests (not Git, Docker, or AI operations)
     if (!isGit && !isDocker && !isAI && ['GET', 'HEAD'].includes(request.method)) {
-      const cachedResponse = await cache.match(cacheKey);
+      const cachedResponse = SimpleCache.get(cacheKey);
       if (cachedResponse) {
         monitor.mark('cache-hit');
         return addPerformanceHeaders(cachedResponse, monitor);
@@ -465,7 +495,7 @@ export async function handleRequest(request, env, ctx) {
       ['GET', 'HEAD'].includes(request.method) &&
       (response.ok || response.status === 206)
     ) {
-      ctx.waitUntil(cache.put(cacheKey, finalResponse.clone()));
+      SimpleCache.put(cacheKey, finalResponse.clone());
     }
 
     monitor.mark('complete');
@@ -496,10 +526,16 @@ function addPerformanceHeaders(response, monitor) {
 }
 
 /**
- * Cloudflare Pages Functions export
+ * EdgeOne Pages Functions export
  * @param {Object} context - Pages Functions context
  * @returns {Promise<Response>} The response object
  */
 export async function onRequest(context) {
-  return handleRequest(context.request, context.env, context);
+  // Create a mock execution context for EdgeOne Pages
+  const mockCtx = {
+    waitUntil: promise => promise,
+    passThroughOnException: () => {}
+  };
+
+  return handleRequest(context.request, context.env, mockCtx);
 }
