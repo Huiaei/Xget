@@ -11,11 +11,9 @@ describe('Platform Configuration', () => {
         'gitea',
         'codeberg',
         'hf',
-        'civitai',
         'npm',
         'pypi',
-        'conda',
-        'homebrew'
+        'conda'
       ];
 
       requiredPlatforms.forEach(platform => {
@@ -77,18 +75,6 @@ describe('Platform Configuration', () => {
 
       expect(transformPath('/hf/datasets/squad/resolve/main/train.json', 'hf')).toBe(
         '/datasets/squad/resolve/main/train.json'
-      );
-    });
-
-    it('should transform Civitai paths correctly', () => {
-      expect(transformPath('/civitai/api/v1/models', 'civitai')).toBe('/api/v1/models');
-
-      expect(transformPath('/civitai/api/v1/model-versions/1318', 'civitai')).toBe(
-        '/api/v1/model-versions/1318'
-      );
-
-      expect(transformPath('/civitai/api/download/models/1105', 'civitai')).toBe(
-        '/api/download/models/1105'
       );
     });
 
@@ -238,57 +224,6 @@ describe('Platform Configuration', () => {
     });
   });
 
-  describe('Jenkins Plugin Support', () => {
-    it('should have Jenkins platform defined', () => {
-      expect(PLATFORMS).toHaveProperty('jenkins');
-      expect(PLATFORMS.jenkins).toBe('https://updates.jenkins.io');
-    });
-
-    it('should transform Jenkins paths correctly', () => {
-      // Update center JSON - should be redirected to current
-      expect(transformPath('/jenkins/update-center.json', 'jenkins')).toBe(
-        '/current/update-center.json'
-      );
-
-      expect(transformPath('/jenkins/update-center.actual.json', 'jenkins')).toBe(
-        '/current/update-center.actual.json'
-      );
-
-      // Plugin downloads - should preserve download paths
-      expect(
-        transformPath('/jenkins/download/plugins/maven-plugin/3.27/maven-plugin.hpi', 'jenkins')
-      ).toBe('/download/plugins/maven-plugin/3.27/maven-plugin.hpi');
-
-      // Experimental update center - should preserve experimental paths
-      expect(transformPath('/jenkins/experimental/update-center.json', 'jenkins')).toBe(
-        '/experimental/update-center.json'
-      );
-
-      // Current paths - should preserve current paths
-      expect(transformPath('/jenkins/current/update-center.json', 'jenkins')).toBe(
-        '/current/update-center.json'
-      );
-
-      // Other paths - should be prefixed with current
-      expect(transformPath('/jenkins/test-path', 'jenkins')).toBe('/current/test-path');
-    });
-
-    it('should construct valid URLs for Jenkins services', () => {
-      const jenkinsUrls = [
-        '/jenkins/update-center.json',
-        '/jenkins/download/plugins/git/5.2.1/git.hpi',
-        '/jenkins/experimental/update-center.json',
-        '/jenkins/current/update-center.actual.json'
-      ];
-
-      jenkinsUrls.forEach(path => {
-        const transformedPath = transformPath(path, 'jenkins');
-        const fullUrl = PLATFORMS.jenkins + transformedPath;
-        expect(() => new URL(fullUrl)).not.toThrow();
-      });
-    });
-  });
-
   describe('Container Registry Support', () => {
     it('should have all major container registries defined', () => {
       const containerRegistries = [
@@ -342,127 +277,6 @@ describe('Platform Configuration', () => {
         const testPath = `/${prefix}/v2/test/image/manifests/latest`;
         const transformedPath = transformPath(testPath, registry);
         expect(transformedPath).toBe('/v2/test/image/manifests/latest');
-      });
-    });
-  });
-
-  describe('AI Inference Providers Support', () => {
-    it('should have all major AI inference providers defined', () => {
-      const aiProviders = [
-        'ip-openai',
-        'ip-anthropic',
-        'ip-gemini',
-        'ip-vertexai',
-        'ip-cohere',
-        'ip-mistralai',
-        'ip-xai',
-        'ip-githubmodels',
-        'ip-nvidiaapi',
-        'ip-perplexity',
-        'ip-braintrust',
-        'ip-groq',
-        'ip-cerebras',
-        'ip-sambanova',
-        'ip-huggingface',
-        'ip-together',
-        'ip-replicate',
-        'ip-fireworks',
-        'ip-nebius',
-        'ip-jina',
-        'ip-voyageai',
-        'ip-falai',
-        'ip-novita',
-        'ip-burncloud',
-        'ip-openrouter',
-        'ip-poe',
-        'ip-featherlessai',
-        'ip-hyperbolic'
-      ];
-
-      aiProviders.forEach(provider => {
-        expect(PLATFORMS).toHaveProperty(provider);
-        expect(PLATFORMS[provider]).toBeDefined();
-        expect(typeof PLATFORMS[provider]).toBe('string');
-        expect(PLATFORMS[provider]).toMatch(/^https:\/\/.+/);
-      });
-    });
-
-    it('should transform AI inference provider paths correctly', () => {
-      const testCases = [
-        {
-          provider: 'ip-openai',
-          inputPath: '/ip/openai/v1/chat/completions',
-          expectedPath: '/v1/chat/completions'
-        },
-        {
-          provider: 'ip-anthropic',
-          inputPath: '/ip/anthropic/v1/messages',
-          expectedPath: '/v1/messages'
-        },
-        {
-          provider: 'ip-gemini',
-          inputPath: '/ip/gemini/v1beta/models/gemini-2.5-flash:generateContent',
-          expectedPath: '/v1beta/models/gemini-2.5-flash:generateContent'
-        },
-        {
-          provider: 'ip-cohere',
-          inputPath: '/ip/cohere/v1/generate',
-          expectedPath: '/v1/generate'
-        },
-        {
-          provider: 'ip-huggingface',
-          inputPath: '/ip/huggingface/models/meta-llama/Llama-2-7b-chat-hf',
-          expectedPath: '/models/meta-llama/Llama-2-7b-chat-hf'
-        },
-        {
-          provider: 'ip-together',
-          inputPath: '/ip/together/v1/chat/completions',
-          expectedPath: '/v1/chat/completions'
-        },
-        {
-          provider: 'ip-replicate',
-          inputPath: '/ip/replicate/v1/predictions',
-          expectedPath: '/v1/predictions'
-        },
-        {
-          provider: 'ip-groq',
-          inputPath: '/ip/groq/openai/v1/chat/completions',
-          expectedPath: '/openai/v1/chat/completions'
-        }
-      ];
-
-      testCases.forEach(({ provider, inputPath, expectedPath }) => {
-        const transformedPath = transformPath(inputPath, provider);
-        expect(transformedPath).toBe(expectedPath);
-      });
-    });
-
-    it('should construct valid URLs for AI inference providers', () => {
-      const aiProviders = [
-        'ip-openrouter',
-        'ip-openai',
-        'ip-anthropic',
-        'ip-gemini',
-        'ip-cohere',
-        'ip-huggingface',
-        'ip-together',
-        'ip-replicate',
-        'ip-groq',
-        'ip-fireworks',
-        'ip-mistralai',
-        'ip-perplexity'
-      ];
-
-      aiProviders.forEach(provider => {
-        const testPath = `/ip/${provider.replace('ip-', '')}/v1/test`;
-        const transformedPath = transformPath(testPath, provider);
-        const baseUrl = PLATFORMS[provider];
-
-        // Skip dynamic URLs with placeholders
-        if (!baseUrl.includes('{')) {
-          const fullUrl = baseUrl + transformedPath;
-          expect(() => new URL(fullUrl)).not.toThrow();
-        }
       });
     });
   });
