@@ -1,4 +1,4 @@
-import { CONFIG, createConfig } from './config/index.js';
+import { CONFIG } from './config/index.js';
 import { transformPath } from './config/platforms.js';
 
 /**
@@ -102,98 +102,28 @@ function isGitRequest(request, url) {
 }
 
 /**
- * Check if the request is for an AI inference provider
- * @param {Request} request - The incoming request object
- * @param {URL} url - Parsed URL object
- * @returns {boolean} True if this is an AI inference request
- */
-function isAIInferenceRequest(request, url) {
-  // Check for AI inference provider paths (ip/{provider}/...)
-  if (url.pathname.startsWith('/ip/')) {
-    return true;
-  }
-
-  // Check for common AI inference API endpoints
-  const aiEndpoints = [
-    '/v1/chat/completions',
-    '/v1/completions',
-    '/v1/messages',
-    '/v1/predictions',
-    '/v1/generate',
-    '/v1/embeddings',
-    '/openai/v1/chat/completions'
-  ];
-
-  if (aiEndpoints.some(endpoint => url.pathname.includes(endpoint))) {
-    return true;
-  }
-
-  // Check for AI-specific content types
-  const contentType = request.headers.get('Content-Type') || '';
-  if (contentType.includes('application/json') && request.method === 'POST') {
-    // Additional check for common AI inference patterns in URL
-    if (
-      url.pathname.includes('/chat/') ||
-      url.pathname.includes('/completions') ||
-      url.pathname.includes('/generate') ||
-      url.pathname.includes('/predict')
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
  * Validates incoming requests against security rules
  * @param {Request} request - The incoming request object
  * @param {URL} url - Parsed URL object
- * @param {import('./config/index.js').ApplicationConfig} config - Configuration object
  * @returns {{valid: boolean, error?: string, status?: number}} Validation result
  */
-function validateRequest(request, url, config = CONFIG) {
-  // Allow POST method for Git, Docker, and AI inference operations
+function validateRequest(request, url) {
+  // Allow POST method for Git and Docker operations
   const isGit = isGitRequest(request, url);
   const isDocker = isDockerRequest(request, url);
-  const isAI = isAIInferenceRequest(request, url);
 
   const allowedMethods =
-    isGit || isDocker || isAI
-      ? ['GET', 'HEAD', 'POST', 'PUT', 'PATCH']
-      : config.SECURITY.ALLOWED_METHODS;
+    isGit || isDocker ? ['GET', 'HEAD', 'POST', 'PUT', 'PATCH'] : CONFIG.SECURITY.ALLOWED_METHODS;
 
   if (!allowedMethods.includes(request.method)) {
     return { valid: false, error: 'Method not allowed', status: 405 };
   }
 
-  if (url.pathname.length > config.SECURITY.MAX_PATH_LENGTH) {
+  if (url.pathname.length > CONFIG.SECURITY.MAX_PATH_LENGTH) {
     return { valid: false, error: 'Path too long', status: 414 };
   }
 
   return { valid: true };
-}
-
-/**
- * Creates a standardized error response
- * @param {string} message - Error message
- * @param {number} status - HTTP status code
- * @param {boolean} includeDetails - Whether to include detailed error information
- * @returns {Response} Error response
- */
-function createErrorResponse(message, status, includeDetails = false) {
-  const errorBody = includeDetails
-    ? JSON.stringify({ error: message, status, timestamp: new Date().toISOString() })
-    : message;
-
-  return new Response(errorBody, {
-    status,
-    headers: addSecurityHeaders(
-      new Headers({
-        'Content-Type': includeDetails ? 'application/json' : 'text/plain'
-      })
-    )
-  });
 }
 
 /**
@@ -248,7 +178,7 @@ async function fetchToken(wwwAuthenticate, scope, authorization) {
   if (authorization) {
     headers.set('Authorization', authorization);
   }
-  return await fetch(url, { method: 'GET', headers });
+  return await fetch(url, { method: 'GET', headers: headers });
 }
 
 /**
@@ -261,7 +191,7 @@ function responseUnauthorized(url) {
   headers.set('WWW-Authenticate', `Bearer realm="https://${url.hostname}/v2/auth",service="Xget"`);
   return new Response(JSON.stringify({ message: 'UNAUTHORIZED' }), {
     status: 401,
-    headers
+    headers: headers
   });
 }
 
@@ -274,8 +204,6 @@ function responseUnauthorized(url) {
  */
 async function handleRequest(request, env, ctx) {
   try {
-    // Create config with environment variable overrides
-    const config = env ? createConfig(env) : CONFIG;
     const url = new URL(request.url);
     const isDocker = isDockerRequest(request, url);
 
@@ -293,13 +221,16 @@ async function handleRequest(request, env, ctx) {
 
     // Redirect root path or invalid platforms to GitHub repository
     if (url.pathname === '/' || url.pathname === '') {
-      const HOME_PAGE_URL = 'https://github.com/xixu-me/Xget';
+      const HOME_PAGE_URL = 'https://inwpu.github.io';
       return Response.redirect(HOME_PAGE_URL, 302);
     }
 
-    const validation = validateRequest(request, url, config);
+    const validation = validateRequest(request, url);
     if (!validation.valid) {
-      return createErrorResponse(validation.error || 'Validation failed', validation.status || 400);
+      return new Response(validation.error, {
+        status: validation.status,
+        headers: addSecurityHeaders(new Headers())
+      });
     }
 
     // Parse platform and path
@@ -311,7 +242,10 @@ async function handleRequest(request, env, ctx) {
       // For Docker requests (excluding version check which is handled above),
       // check if they have /cr/ prefix
       if (!url.pathname.startsWith('/cr/') && !url.pathname.startsWith('/v2/cr/')) {
-        return createErrorResponse('container registry requests must use /cr/ prefix', 400);
+        return new Response('container registry requests must use /cr/ prefix', {
+          status: 400,
+          headers: addSecurityHeaders(new Headers())
+        });
       }
       // Remove /v2 from the path for container registry API consistency if present
       effectivePath = url.pathname.replace(/^\/v2/, '');
@@ -320,7 +254,7 @@ async function handleRequest(request, env, ctx) {
     // Platform detection using transform patterns
     // Sort platforms by path length (descending) to prioritize more specific paths
     // e.g., conda/community should match before conda, pypi/files before pypi
-    const sortedPlatforms = Object.keys(config.PLATFORMS).sort((a, b) => {
+    const sortedPlatforms = Object.keys(CONFIG.PLATFORMS).sort((a, b) => {
       const pathA = `/${a.replace('-', '/')}/`;
       const pathB = `/${b.replace('-', '/')}/`;
       return pathB.length - pathA.length;
@@ -332,8 +266,8 @@ async function handleRequest(request, env, ctx) {
         return effectivePath.startsWith(expectedPrefix);
       }) || effectivePath.split('/')[1];
 
-    if (!platform || !config.PLATFORMS[platform]) {
-      const HOME_PAGE_URL = 'https://github.com/xixu-me/Xget';
+    if (!platform || !CONFIG.PLATFORMS[platform]) {
+      const HOME_PAGE_URL = 'https://inwpu.github.io';
       return Response.redirect(HOME_PAGE_URL, 302);
     }
 
@@ -348,12 +282,12 @@ async function handleRequest(request, env, ctx) {
       finalTargetPath = targetPath;
     }
 
-    const targetUrl = `${config.PLATFORMS[platform]}${finalTargetPath}${url.search}`;
+    const targetUrl = `${CONFIG.PLATFORMS[platform]}${finalTargetPath}${url.search}`;
     const authorization = request.headers.get('Authorization');
 
     // Handle Docker authentication
     if (isDocker && url.pathname === '/v2/auth') {
-      const newUrl = new URL(`${config.PLATFORMS[platform]}/v2/`);
+      const newUrl = new URL(CONFIG.PLATFORMS[platform] + '/v2/');
       const resp = await fetch(newUrl.toString(), {
         method: 'GET',
         redirect: 'follow'
@@ -366,45 +300,24 @@ async function handleRequest(request, env, ctx) {
         return resp;
       }
       const wwwAuthenticate = parseAuthenticate(authenticateStr);
-      const scope = url.searchParams.get('scope');
+      let scope = url.searchParams.get('scope');
       return await fetchToken(wwwAuthenticate, scope || '', authorization || '');
     }
 
     // Check if this is a Git operation
     const isGit = isGitRequest(request, url);
 
-    // Check if this is an AI inference request
-    const isAI = isAIInferenceRequest(request, url);
-
-    // Check cache first (skip cache for Git, Docker, and AI inference operations)
-    /** @type {Cache} */
-    // @ts-ignore - Cloudflare Workers cache API
+    // Check cache first (skip cache for Git and Docker operations)
+    // @ts-ignore
     const cache = caches.default;
+    const cacheKey = new Request(targetUrl, request);
     let response;
 
-    if (!isGit && !isDocker && !isAI) {
-      // For Range requests, try cache match first
-      const cacheKey = new Request(targetUrl, request);
+    if (!isGit && !isDocker) {
       response = await cache.match(cacheKey);
       if (response) {
         monitor.mark('cache_hit');
         return response;
-      }
-
-      // If Range request missed cache, try with original request to see if we have full content cached
-      const rangeHeader = request.headers.get('Range');
-      if (rangeHeader) {
-        const fullContentKey = new Request(targetUrl, {
-          method: request.method,
-          headers: new Headers(
-            [...request.headers.entries()].filter(([k]) => k.toLowerCase() !== 'range')
-          )
-        });
-        response = await cache.match(fullContentKey);
-        if (response) {
-          monitor.mark('cache_hit_full_content');
-          return response;
-        }
       }
     }
 
@@ -415,17 +328,17 @@ async function handleRequest(request, env, ctx) {
       redirect: 'follow'
     };
 
-    // Add body for POST/PUT/PATCH requests (Git/Docker/AI inference operations)
-    if (['POST', 'PUT', 'PATCH'].includes(request.method) && (isGit || isDocker || isAI)) {
+    // Add body for POST/PUT/PATCH requests (Git/Docker operations)
+    if (['POST', 'PUT', 'PATCH'].includes(request.method) && (isGit || isDocker)) {
       fetchOptions.body = request.body;
     }
 
     // Cast headers to Headers for proper typing
     const requestHeaders = /** @type {Headers} */ (fetchOptions.headers);
 
-    // Set appropriate headers for Git/Docker/AI vs regular requests
-    if (isGit || isDocker || isAI) {
-      // For Git/Docker/AI operations, copy all headers from the original request
+    // Set appropriate headers for Git/Docker vs regular requests
+    if (isGit || isDocker) {
+      // For Git/Docker operations, copy all headers from the original request
       // This ensures protocol compliance
       for (const [key, value] of request.headers.entries()) {
         // Skip headers that might cause issues with proxying
@@ -452,25 +365,12 @@ async function handleRequest(request, env, ctx) {
           requestHeaders.set('Content-Type', 'application/x-git-receive-pack-request');
         }
       }
-
-      // For AI inference requests, ensure proper content type and headers
-      if (isAI) {
-        // Ensure JSON content type for AI API requests if not already set
-        if (request.method === 'POST' && !requestHeaders.has('Content-Type')) {
-          requestHeaders.set('Content-Type', 'application/json');
-        }
-
-        // Set appropriate User-Agent for AI requests if not present
-        if (!requestHeaders.has('User-Agent')) {
-          requestHeaders.set('User-Agent', 'Xget-AI-Proxy/1.0');
-        }
-      }
     } else {
       // Regular file download headers
       Object.assign(fetchOptions, {
         cf: {
           http3: true,
-          cacheTtl: config.CACHE_DURATION,
+          cacheTtl: CONFIG.CACHE_DURATION,
           cacheEverything: true,
           minify: {
             javascript: true,
@@ -486,45 +386,22 @@ async function handleRequest(request, env, ctx) {
       requestHeaders.set('User-Agent', 'Wget/1.21.3');
       requestHeaders.set('Origin', request.headers.get('Origin') || '*');
 
-      // Handle range requests - but don't forward Range header if we need to cache full content
+      // Handle range requests
       const rangeHeader = request.headers.get('Range');
-
-      // Detect media files to avoid compression for better Range support
-      const isMediaFile = targetUrl.match(
-        /\.(mp4|avi|mkv|mov|wmv|flv|webm|mp3|wav|flac|aac|ogg|jpg|jpeg|png|gif|bmp|svg|pdf|zip|rar|7z|tar|gz|bz2|xz)$/i
-      );
-
-      if (isMediaFile || rangeHeader) {
-        // For media files or range requests, avoid compression to ensure proper byte-range support
-        requestHeaders.set('Accept-Encoding', 'identity');
-      }
-
-      // For Range requests, we need to decide whether to forward the Range header
-      // If we want to cache the full content first, don't send Range to origin
       if (rangeHeader) {
-        // Check if we already have full content cached
-        const fullContentKey = new Request(targetUrl, {
-          method: request.method,
-          headers: new Headers(
-            [...request.headers.entries()].filter(([k]) => k.toLowerCase() !== 'range')
-          )
-        });
-
-        // If we're going to try to get full content for caching, don't send Range header
-        // This will be handled in the retry logic
         requestHeaders.set('Range', rangeHeader);
       }
     }
 
     // Implement retry mechanism
     let attempts = 0;
-    while (attempts < config.MAX_RETRIES) {
+    while (attempts < CONFIG.MAX_RETRIES) {
       try {
-        monitor.mark(`attempt_${attempts}`);
+        monitor.mark('attempt_' + attempts);
 
         // Fetch with timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), config.TIMEOUT_SECONDS * 1000);
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_SECONDS * 1000);
 
         // For Git/Docker operations, don't use Cloudflare-specific options
         const finalFetchOptions =
@@ -532,41 +409,7 @@ async function handleRequest(request, env, ctx) {
             ? { ...fetchOptions, signal: controller.signal }
             : { ...fetchOptions, signal: controller.signal };
 
-        // Special handling for HEAD requests to ensure Content-Length header
-        if (request.method === 'HEAD') {
-          // First, try the HEAD request
-          response = await fetch(targetUrl, finalFetchOptions);
-
-          // If HEAD request succeeds but lacks Content-Length, do a GET request to get it
-          if (response.ok && !response.headers.get('Content-Length')) {
-            const getResponse = await fetch(targetUrl, {
-              ...finalFetchOptions,
-              method: 'GET'
-            });
-
-            if (getResponse.ok) {
-              // Create a new response with HEAD method but include Content-Length from GET
-              const headHeaders = new Headers(response.headers);
-              const contentLength = getResponse.headers.get('Content-Length');
-
-              if (contentLength) {
-                headHeaders.set('Content-Length', contentLength);
-              } else {
-                // If still no Content-Length, calculate it from the response body
-                const arrayBuffer = await getResponse.arrayBuffer();
-                headHeaders.set('Content-Length', arrayBuffer.byteLength.toString());
-              }
-
-              response = new Response(null, {
-                status: getResponse.status,
-                statusText: getResponse.statusText,
-                headers: headHeaders
-              });
-            }
-          }
-        } else {
-          response = await fetch(targetUrl, finalFetchOptions);
-        }
+        response = await fetch(targetUrl, finalFetchOptions);
 
         clearTimeout(timeoutId);
 
@@ -640,30 +483,35 @@ async function handleRequest(request, env, ctx) {
         }
 
         attempts++;
-        if (attempts < config.MAX_RETRIES) {
-          await new Promise(resolve => setTimeout(resolve, config.RETRY_DELAY_MS * attempts));
+        if (attempts < CONFIG.MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * attempts));
         }
       } catch (error) {
         attempts++;
         if (error instanceof Error && error.name === 'AbortError') {
-          return createErrorResponse('Request timeout', 408);
+          return new Response('Request timeout', {
+            status: 408,
+            headers: addSecurityHeaders(new Headers())
+          });
         }
-        if (attempts >= config.MAX_RETRIES) {
+        if (attempts >= CONFIG.MAX_RETRIES) {
           const message = error instanceof Error ? error.message : String(error);
-          return createErrorResponse(
-            `Failed after ${config.MAX_RETRIES} attempts: ${message}`,
-            500,
-            true
-          );
+          return new Response(`Failed after ${CONFIG.MAX_RETRIES} attempts: ${message}`, {
+            status: 500,
+            headers: addSecurityHeaders(new Headers())
+          });
         }
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, config.RETRY_DELAY_MS * attempts));
+        await new Promise(resolve => setTimeout(resolve, CONFIG.RETRY_DELAY_MS * attempts));
       }
     }
 
     // Check if we have a valid response after all attempts
     if (!response) {
-      return createErrorResponse('No response received after all retry attempts', 500, true);
+      return new Response('No response received after all retry attempts', {
+        status: 500,
+        headers: addSecurityHeaders(new Headers())
+      });
     }
 
     // If response is still not ok after all retries, return the error
@@ -672,18 +520,19 @@ async function handleRequest(request, env, ctx) {
       // return a more helpful error message
       if (isDocker && response.status === 401) {
         const errorText = await response.text().catch(() => '');
-        return createErrorResponse(
+        return new Response(
           `Authentication required for this container registry resource. This may be a private repository. Original error: ${errorText}`,
-          401,
-          true
+          {
+            status: 401,
+            headers: addSecurityHeaders(new Headers())
+          }
         );
       }
       const errorText = await response.text().catch(() => 'Unknown error');
-      return createErrorResponse(
-        `Upstream server error (${response.status}): ${errorText}`,
-        response.status,
-        true
-      );
+      return new Response(`Upstream server error (${response.status}): ${errorText}`, {
+        status: response.status,
+        headers: addSecurityHeaders(new Headers())
+      });
     }
 
     // Handle URL rewriting for different platforms
@@ -698,12 +547,7 @@ async function handleRequest(request, env, ctx) {
         /https:\/\/files\.pythonhosted\.org/g,
         `${url.origin}/pypi/files`
       );
-      responseBody = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(rewrittenText));
-          controller.close();
-        }
-      });
+      responseBody = rewrittenText;
     }
 
     // Handle npm registry URL rewriting
@@ -715,12 +559,7 @@ async function handleRequest(request, env, ctx) {
         /https:\/\/registry\.npmjs\.org\/([^\/]+)/g,
         `${url.origin}/npm/$1`
       );
-      responseBody = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(rewrittenText));
-          controller.close();
-        }
-      });
+      responseBody = rewrittenText;
     }
 
     // Prepare response headers
@@ -733,75 +572,32 @@ async function handleRequest(request, env, ctx) {
       // The response headers from upstream should be passed through as-is
     } else {
       // Regular file download headers
-      headers.set('Cache-Control', `public, max-age=${config.CACHE_DURATION}`);
+      headers.set('Cache-Control', `public, max-age=${CONFIG.CACHE_DURATION}`);
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Accept-Ranges', 'bytes');
-
-      // Ensure Content-Length is present for proper Range support
-      if (!headers.has('Content-Length') && response.status === 200) {
-        // If Content-Length is missing and we have access to the body, calculate it
-        try {
-          const contentLength = response.headers.get('Content-Length');
-          if (contentLength) {
-            headers.set('Content-Length', contentLength);
-          }
-        } catch (error) {
-          console.warn('Could not set Content-Length header:', error);
-        }
-      }
-
       addSecurityHeaders(headers);
     }
 
     // Create final response
     const finalResponse = new Response(responseBody, {
       status: response.status,
-      headers
+      headers: headers
     });
 
-    // Cache successful responses (skip caching for Git, Docker, and AI inference operations)
-    // Only cache GET and HEAD requests to avoid "Cannot cache response to non-GET request" errors
-    // IMPORTANT: Only cache 200 responses, NOT 206 responses (Cloudflare Workers Cache API rejects 206)
-    if (
-      !isGit &&
-      !isDocker &&
-      !isAI &&
-      ['GET', 'HEAD'].includes(request.method) &&
-      response.ok &&
-      response.status === 200 // Only cache complete responses (200), not partial content (206)
-    ) {
-      // For Range requests that resulted in 200, cache the full response
-      const rangeHeader = request.headers.get('Range');
-      const cacheKey = rangeHeader
-        ? new Request(targetUrl, {
-            method: request.method,
-            headers: new Headers(
-              [...request.headers.entries()].filter(([k]) => k.toLowerCase() !== 'range')
-            )
-          })
-        : new Request(targetUrl, request);
-
+    // Cache successful responses (skip caching for Git and Docker operations)
+    if (!isGit && !isDocker && (response.ok || response.status === 206)) {
       ctx.waitUntil(cache.put(cacheKey, finalResponse.clone()));
-
-      // If this was originally a Range request and we got a 200 (full content),
-      // try cache.match again with the original Range request to get 206 response
-      if (rangeHeader && response.status === 200) {
-        const rangedResponse = await cache.match(new Request(targetUrl, request));
-        if (rangedResponse) {
-          monitor.mark('range_cache_hit_after_full_cache');
-          return rangedResponse;
-        }
-      }
     }
 
     monitor.mark('complete');
-    return isGit || isDocker || isAI
-      ? finalResponse
-      : addPerformanceHeaders(finalResponse, monitor);
+    return isGit || isDocker ? finalResponse : addPerformanceHeaders(finalResponse, monitor);
   } catch (error) {
     console.error('Error handling request:', error);
     const message = error instanceof Error ? error.message : String(error);
-    return createErrorResponse(`Internal Server Error: ${message}`, 500, true);
+    return new Response(`Internal Server Error: ${message}`, {
+      status: 500,
+      headers: addSecurityHeaders(new Headers())
+    });
   }
 }
 
@@ -817,7 +613,7 @@ function addPerformanceHeaders(response, monitor) {
   addSecurityHeaders(headers);
   return new Response(response.body, {
     status: response.status,
-    headers
+    headers: headers
   });
 }
 
